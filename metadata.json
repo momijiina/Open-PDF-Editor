@@ -1,0 +1,5 @@
+{
+  "name": "Open-PDF-Editor",
+  "description": "シンプルなPDFビューアおよびエディタです。PDFをアップロードし、テキストや描画を追加して、変更を新しいファイルに保存できます。",
+  "requestFramePermissions": []
+}
