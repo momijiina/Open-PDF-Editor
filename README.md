@@ -5,6 +5,9 @@ AI Studioでバイブコーディングしてます。<br/>
 <img width="1481" height="841" alt="image" src="https://github.com/user-attachments/assets/420c658b-b5c4-4cd7-bd9b-fc669c175d3f" />
 
 [Demoサイト](https://pdf.momijiina.com/) <br/>
+
+[サンプルpdf](https://github.com/user-attachments/files/24206557/ChronoChef.pdf)
+
 画像挿入後に回転をすると保持できない。<br/>
 署名を押しても1回目反応しない等のバグを確認。<br/>
 直すかは不明<br/>
