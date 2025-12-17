@@ -6,7 +6,7 @@ AI Studioでバイブコーディングしてます。<br/>
 
 [Demoサイト](https://pdf.momijiina.com/) <br/>
 
-[サンプルpdf](https://github.com/user-attachments/files/24206557/ChronoChef.pdf)
+[サンプルPDF](https://github.com/user-attachments/files/24206557/ChronoChef.pdf)
 
 画像挿入後に回転をすると保持できない。<br/>
 署名を押しても1回目反応しない等のバグを確認。<br/>
