@@ -4,7 +4,7 @@
     <div class="flex items-center gap-3">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-red-600" viewBox="0 0 24 24" fill="currentColor">
         <path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm-3.5-1.5h1v-3h-1v3z"/>
-        <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2-H4V6z"/>
+        <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2 H4V6z"/>
       </svg>
       <h1 class="text-2xl font-bold text-gray-800">PDFエディター</h1>
     </div>
@@ -26,19 +26,31 @@
           title="編集"
           (click)="selectTab('edit')"
           [class.bg-gray-600]="activeTab() === 'edit'"
-          class="p-3 rounded-lg hover:bg-gray-700 transition-colors duration-200">
+          class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" />
           </svg>
+          <span class="text-xs">編集</span>
         </button>
         <button
           title="整理"
           (click)="selectTab('organize')"
           [class.bg-gray-600]="activeTab() === 'organize'"
-          class="p-3 rounded-lg hover:bg-gray-700 transition-colors duration-200">
+          class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
           </svg>
+          <span class="text-xs">整理</span>
+        </button>
+        <button
+          title="セキュリティ"
+          (click)="selectTab('security')"
+          [class.bg-gray-600]="activeTab() === 'security'"
+          class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 2L4 5v5.09c0 4.97 7.21 9.22 8 9.41 0.79-0.19 8-4.44 8-9.41V5L12 2z" />
+          </svg>
+          <span class="text-xs">セキュリティ</span>
         </button>
       </div>
 
@@ -51,66 +63,73 @@
             title="選択"
             (click)="selectTool('select')"
             [class.bg-gray-600]="activeTool() === 'select'"
-            class="p-3 rounded-lg hover:bg-gray-700 transition-colors duration-200">
+            class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
+            <span class="text-xs">選択</span>
           </button>
            <button
             title="署名"
             (click)="openSignatureModal()"
             [disabled]="!isPdfLoaded()"
-            class="p-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
+            class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
+            <span class="text-xs">署名</span>
           </button>
           <button
             title="テキストを追加"
             (click)="selectTool('text')"
             [class.bg-gray-600]="activeTool() === 'text'"
-            class="p-3 rounded-lg hover:bg-gray-700 transition-colors duration-200">
+            class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 4v16m8-16v16M4 8h16m-16 8h16" />
             </svg>
+            <span class="text-xs">テキスト</span>
           </button>
            <button
             title="画像を追加"
             (click)="addImage()"
             [disabled]="!isPdfLoaded()"
-            class="p-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
+            class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
+            <span class="text-xs">画像</span>
           </button>
           <button
             title="描画"
             (click)="selectTool('draw')"
             [class.bg-gray-600]="activeTool() === 'draw'"
-            class="p-3 rounded-lg hover:bg-gray-700 transition-colors duration-200">
+            class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" />
             </svg>
+            <span class="text-xs">描画</span>
           </button>
            <button
               title="透かし"
               (click)="toggleWatermarkPanel()"
               [disabled]="!isPdfLoaded()"
               [class.bg-gray-600]="isWatermarkPanelOpen()"
-              class="p-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
+              class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.75-1-2.388l-.548-.547z" />
               </svg>
+              <span class="text-xs">透かし</span>
             </button>
           <button
             [title]="pageNumberSettings().visible ? 'ページ番号を編集' : 'ページ番号を追加'"
             (click)="togglePageNumberPanel()"
             [disabled]="!isPdfLoaded()"
             [class.bg-gray-600]="isPageNumberPanelOpen()"
-            class="p-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
+            class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/>
             </svg>
+            <span class="text-xs">ページ番号</span>
           </button>
 
           <div class="w-4/5 border-t border-gray-700"></div>
@@ -135,17 +154,28 @@
           </button>
 
         } @else if (activeTab() === 'organize') {
-          <button title="時計回りに90度回転" (click)="rotatePage(90)" [disabled]="!isPdfLoaded()" class="p-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
+          <button title="時計回りに90度回転" (click)="rotatePage(90)" [disabled]="!isPdfLoaded()" class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8C6.52 8 2.55 11.53 1.56 16.04L0 15.22C1.22 9.98 5.89 6 11.5 6C14.61 6 17.44 7.15 19.58 9.02L21 7.5V13h-5.5l2.9-2.4z"/></svg>
+            <span class="text-xs">右回転</span>
           </button>
-          <button title="反時計回りに90度回転" (click)="rotatePage(-90)" [disabled]="!isPdfLoaded()" class="p-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
+          <button title="反時計回りに90度回転" (click)="rotatePage(-90)" [disabled]="!isPdfLoaded()" class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.6 10.6c1.85-1.61 4.25-2.6 6.9-2.6c4.98 0 8.95 3.53 9.94 8.04l1.44-.82C22.78 9.98 18.11 6 12.5 6C9.39 6 6.56 7.15 4.42 9.02L3 7.5V13h5.5l-2.9-2.4z"/></svg>
+            <span class="text-xs">左回転</span>
           </button>
-          <button title="ページを削除" (click)="deletePage(currentPageNum())" [disabled]="!isPdfLoaded() || totalPages() <= 1" class="p-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
+          <button title="ページを削除" (click)="deletePage(currentPageNum())" [disabled]="!isPdfLoaded() || totalPages() <= 1" class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            <span class="text-xs">削除</span>
           </button>
-           <button title="ページを抽出" (click)="extractPage()" [disabled]="!isPdfLoaded()" class="p-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13v6h6v-6h4l-7-7-7 7h4zm-4 6v2h14v-2-H5z"/></svg>
+           <button title="ページを抽出" (click)="extractPage()" [disabled]="!isPdfLoaded()" class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13v6h6v-6h4l-7-7-7 7h4zm-4 6v2h14v-2 H5z"/></svg>
+            <span class="text-xs">抽出</span>
+          </button>
+        } @else if (activeTab() === 'security') {
+          <button title="パスワード保護" (click)="openPasswordModal()" [disabled]="!isPdfLoaded()" class="flex flex-col items-center justify-center w-16 gap-1 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors duration-200">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <span class="text-xs">パスワード保護</span>
           </button>
         }
       </div>
@@ -171,80 +201,152 @@
     </aside>
 
     <!-- Page Previews -->
-    <aside class="w-64 bg-gray-100 p-4 overflow-y-auto border-r border-gray-300 shrink-0">
-      @if(isPdfLoaded()) {
-        <div class="space-y-2">
-          <!-- Drop zone / Add button before first page -->
-          @if (draggedPageIndex() !== -1) {
-            <div
-              class="h-24 border-2 border-dashed rounded-lg transition-colors duration-200"
-              [class.bg-blue-100]="dragOverIndex() === 0"
-              [class.border-blue-400]="dragOverIndex() === 0"
-              [class.border-gray-300]="dragOverIndex() !== 0"
-              (dragover)="onDragOver($event, 0)"
-              (dragleave)="onDragLeave()"
-              (drop)="onDrop(0)">
-            </div>
-          } @else {
-            <div
-              (click)="promptInsertPdf(0)"
-              (dragover)="onDragOverInsert($event, 0)"
-              (dragleave)="onDragLeaveInsert()"
-              (drop)="onDropInsert($event, 0)"
-              class="w-full flex justify-center items-center h-12 text-gray-400 hover:text-blue-500 hover:bg-gray-200 rounded-lg transition-colors border-2 border-dashed cursor-pointer"
-              [class.bg-blue-100]="isDraggingOverInsert() === 0"
-              [class.border-blue-400]="isDraggingOverInsert() === 0"
-              [class.border-gray-300]="isDraggingOverInsert() !== 0">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            </div>
-          }
-          
-          @for (pageNumber of pageOrder(); track pageNumber; let i = $index) {
-            <!-- Page item -->
-            <div
-              class="relative border-2 rounded-md shadow-sm cursor-pointer hover:border-blue-400 transition-all"
-              [class.border-blue-500]="currentPageNum() === pageNumber && draggedPageIndex() === -1"
-              [class.border-transparent]="currentPageNum() !== pageNumber || draggedPageIndex() !== -1"
-              [class.opacity-25]="draggedPageIndex() === i"
-              (click)="goToPage(i + 1)"
-              draggable="true"
-              (dragstart)="onDragStart(i)"
-              (dragend)="onDragEnd()">
-                <canvas #thumbnailCanvas [id]="'thumb-canvas-' + pageNumber" class="w-full h-auto rounded-sm"></canvas>
-                <div class="absolute bottom-1 right-1 bg-black bg-opacity-60 text-white text-xs px-1.5 py-0.5 rounded">{{ i + 1 }}</div>
-            </div>
+    <aside #previewPanel (dragover)="handleDragScroll($event)" (dragleave)="clearDragScroll()" 
+           class="bg-slate-100 overflow-y-auto border-gray-300 shrink-0 h-full transition-all duration-300 ease-in-out"
+           [class.w-64]="!isPreviewPanelCollapsed()"
+           [class.p-4]="!isPreviewPanelCollapsed()"
+           [class.border-r]="!isPreviewPanelCollapsed()"
+           [class.w-0]="isPreviewPanelCollapsed()"
+           [class.p-0]="isPreviewPanelCollapsed()"
+           [class.border-r-0]="isPreviewPanelCollapsed()">
+      <div class="overflow-hidden"> <!-- This wrapper prevents content overflow during animation -->
+        @if(isPdfLoaded()) {
+          <div class="flex flex-col items-center">
 
-            <!-- Drop zone / Add button after each page -->
+            <!-- Top Insert Button / Drop Zone -->
             @if (draggedPageIndex() !== -1) {
               <div
-                class="h-24 border-2 border-dashed rounded-lg transition-colors duration-200"
-                [class.bg-blue-100]="dragOverIndex() === i + 1"
-                [class.border-blue-400]="dragOverIndex() === i + 1"
-                [class.border-gray-300]="dragOverIndex() !== i + 1"
-                (dragover)="onDragOver($event, i + 1)"
+                class="h-12 w-full border-2 border-dashed rounded-lg transition-colors duration-200 mb-4"
+                [class.bg-blue-100]="dragOverIndex() === 0"
+                [class.border-blue-400]="dragOverIndex() === 0"
+                [class.border-gray-300]="dragOverIndex() !== 0"
+                (dragover)="onDragOver($event, 0)"
                 (dragleave)="onDragLeave()"
-                (drop)="onDrop(i + 1)">
+                (drop)="onDrop(0)">
               </div>
             } @else {
               <div
-                (click)="promptInsertPdf(i + 1)"
-                (dragover)="onDragOverInsert($event, i + 1)"
+                (dragover)="onDragOverInsert($event, 0)"
                 (dragleave)="onDragLeaveInsert()"
-                (drop)="onDropInsert($event, i + 1)"
-                class="w-full flex justify-center items-center h-12 text-gray-400 hover:text-blue-500 hover:bg-gray-200 rounded-lg transition-colors border-2 border-dashed cursor-pointer"
-                [class.bg-blue-100]="isDraggingOverInsert() === i + 1"
-                [class.border-blue-400]="isDraggingOverInsert() === i + 1"
-                [class.border-gray-300]="isDraggingOverInsert() !== i + 1">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                (drop)="onDropInsert($event, 0)"
+                class="w-full flex justify-center items-center h-10 mb-4 transition-colors rounded-lg"
+                [class.bg-blue-100]="isDraggingOverInsert() === 0">
+                <button (click)="promptInsertPdf(0)" title="先頭にページを挿入" class="bg-blue-500 hover:bg-blue-600 text-white rounded-full h-8 w-8 flex items-center justify-center shadow-md transition-transform hover:scale-110">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+                  </svg>
+                </button>
               </div>
             }
-          }
-        </div>
-      }
+            
+            @for (pageNumber of pageOrder(); track pageNumber; let i = $index) {
+              <!-- Wrapper for one full preview item: card + number -->
+              <div class="w-full flex flex-col items-center">
+                <!-- Page item card -->
+                <div
+                  class="relative bg-white border-2 rounded-lg shadow-md cursor-pointer hover:border-blue-400 transition-all p-2 w-full"
+                  [class.border-blue-500]="currentPageNum() === pageNumber && draggedPageIndex() === -1"
+                  [class.border-gray-200]="currentPageNum() !== pageNumber || draggedPageIndex() !== -1"
+                  [class.opacity-50]="draggedPageIndex() === i"
+                  (click)="goToPage(i + 1)"
+                  draggable="true"
+                  (dragstart)="onDragStart(i)"
+                  (dragend)="onDragEnd()">
+                    
+                    <canvas #thumbnailCanvas [id]="'thumb-canvas-' + pageNumber" class="w-full h-auto rounded-sm"></canvas>
+                    
+                    <!-- Thumbnail Toolbar -->
+                    <div class="mt-2 flex items-center justify-around border-t pt-2">
+                        <button (click)="duplicatePage(pageNumber); $event.stopPropagation()" title="ページを複製" class="p-2 rounded-full hover:bg-gray-100 text-gray-700 transition-colors">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                        <button (click)="rotatePage(90, pageNumber); $event.stopPropagation()" title="時計回りに90度回転" class="p-2 rounded-full hover:bg-gray-100 text-gray-700 transition-colors">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8C6.52 8 2.55 11.53 1.56 16.04L0 15.22C1.22 9.98 5.89 6 11.5 6C14.61 6 17.44 7.15 19.58 9.02L21 7.5V13h-5.5l2.9-2.4z"/></svg>
+                        </button>
+                        <button (click)="deletePage(pageNumber); $event.stopPropagation()" [disabled]="totalPages() <= 1" title="ページを削除" class="p-2 rounded-full hover:bg-gray-100 text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Page number -->
+                <span class="my-2 text-gray-800 font-semibold">{{ i + 1 }}</span>
+              </div>
+
+              <!-- Insert Button / Drop Zone (between pages) -->
+              @if (draggedPageIndex() !== -1) {
+                <div
+                  class="h-12 w-full border-2 border-dashed rounded-lg transition-colors duration-200 my-4"
+                  [class.bg-blue-100]="dragOverIndex() === i + 1"
+                  [class.border-blue-400]="dragOverIndex() === i + 1"
+                  [class.border-gray-300]="dragOverIndex() !== i + 1"
+                  (dragover)="onDragOver($event, i + 1)"
+                  (dragleave)="onDragLeave()"
+                  (drop)="onDrop(i + 1)">
+                </div>
+              } @else {
+                <div
+                  (dragover)="onDragOverInsert($event, i + 1)"
+                  (dragleave)="onDragLeaveInsert()"
+                  (drop)="onDropInsert($event, i + 1)"
+                  class="w-full flex justify-center items-center h-10 my-4 transition-colors rounded-lg"
+                  [class.bg-blue-100]="isDraggingOverInsert() === i + 1">
+                  <button (click)="promptInsertPdf(i + 1)" title="ここにページを挿入" class="bg-blue-500 hover:bg-blue-600 text-white rounded-full h-8 w-8 flex items-center justify-center shadow-md transition-transform hover:scale-110">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+                    </svg>
+                  </button>
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
     </aside>
+
+    <!-- Sidebar Toggle Button -->
+    <div class="h-full flex items-center justify-center bg-slate-100 border-r border-gray-300">
+      <button (click)="togglePreviewPanel()" class="h-16 w-5 flex items-center justify-center hover:bg-gray-200 transition-colors" title="サイドバーを切り替え">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-600 transition-transform duration-300" [class.rotate-180]="isPreviewPanelCollapsed()" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+    </div>
 
     <!-- Viewer Area Wrapper -->
     <div class="flex-grow relative">
+
+      @if (isPasswordModalOpen()) {
+        <div class="absolute inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center" (click)="closePasswordModal()">
+          <div class="bg-white rounded-lg shadow-2xl w-96 flex flex-col" (click)="$event.stopPropagation()">
+            <header class="p-4 flex justify-between items-center border-b">
+              <h2 class="text-lg font-bold">パスワードを設定</h2>
+              <button (click)="closePasswordModal()" class="p-1 rounded-full text-gray-500 hover:bg-gray-200">
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </header>
+            <main class="p-6 space-y-4">
+              <div>
+                <label for="password" class="block text-sm font-medium text-gray-700">新しいパスワード</label>
+                <input type="password" id="password" (input)="password.set($event.target.value)" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+              </div>
+              <div>
+                <label for="confirm-password" class="block text-sm font-medium text-gray-700">パスワードの確認</label>
+                <input type="password" id="confirm-password" (input)="confirmPassword.set($event.target.value)" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+              </div>
+              @if (passwordError()) {
+                <p class="text-sm text-red-600">{{ passwordError() }}</p>
+              }
+            </main>
+            <footer class="p-4 flex justify-end gap-3 bg-gray-50 border-t">
+              <button (click)="closePasswordModal()" class="px-4 py-2 rounded-md text-gray-700 bg-white border hover:bg-gray-100">キャンセル</button>
+              <button (click)="applyPasswordAndSave()" class="px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700">保存</button>
+            </footer>
+          </div>
+        </div>
+      }
 
       @if (isSignatureModalOpen()) {
         <div class="absolute inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center" (click)="closeSignatureModal()">
@@ -265,7 +367,7 @@
               </div>
               <div class="relative w-full h-48 bg-gray-50 rounded-md border-2 border-dashed">
                 <canvas #signatureCanvas 
-                        class="absolute top-0 left-0"
+                        class="absolute top-0 left-0 w-full h-full"
                         (mousedown)="onSignatureMouseDown($event)"
                         (mousemove)="onSignatureMouseMove($event)"
                         (mouseup)="onSignatureMouseUp()"
@@ -294,6 +396,45 @@
               <button (click)="createSignature()" [disabled]="signaturePadPaths().length === 0" class="px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed">作成</button>
             </footer>
           </div>
+        </div>
+      }
+
+      <!-- Text Editing Toolbar -->
+      @if (isTextToolbarVisible()) {
+        <div class="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-white rounded-lg shadow-2xl p-1 flex items-center gap-2 border border-gray-200">
+          <select 
+            class="border rounded px-2 py-1 text-sm focus:ring-blue-500 focus:border-blue-500"
+            [style.font-family]="getCanvasFontFamily(textSettings().font)"
+            [value]="textSettings().font" 
+            (change)="updateTextSetting('font', $event.target.value)">
+              @for(font of availableFonts; track font.id) {
+                <option [value]="font.id" [style.font-family]="getCanvasFontFamily(font.id)">{{ font.name }}</option>
+              }
+          </select>
+
+          <input 
+            type="number" 
+            min="1"
+            class="border rounded px-2 py-1 w-16 text-center text-sm focus:ring-blue-500 focus:border-blue-500"
+            [value]="textSettings().size" 
+            (input)="updateTextSetting('size', $event.target.valueAsNumber || 12)">
+
+          <div class="relative w-8 h-8 flex items-center justify-center">
+            <input 
+              type="color"
+              class="absolute inset-0 opacity-0 cursor-pointer"
+              [value]="textSettings().color"
+              (input)="updateTextSetting('color', $event.target.value)">
+            <div class="w-5 h-5 rounded-full border border-gray-400 pointer-events-none" [style.background-color]="textSettings().color"></div>
+          </div>
+          
+          <button
+            (click)="updateTextSetting('bold', !textSettings().bold)"
+            [class.bg-blue-100]="textSettings().bold"
+            [class.text-blue-600]="textSettings().bold"
+            class="px-3 py-1 text-sm rounded hover:bg-gray-100 font-bold">
+            B
+          </button>
         </div>
       }
 
@@ -387,9 +528,29 @@
             (mousemove)="onMouseMove($event)"
             (mouseup)="onMouseUp($event)"
             (mouseleave)="onMouseLeave()"
+            (dblclick)="onDblClick($event)"
             [style.cursor]="canvasCursor()">
             <canvas #pdfCanvas></canvas>
-            <canvas #drawCanvas class="absolute top-0 left-0"></canvas>
+            <canvas #drawCanvas class="absolute top-0 left-0 pointer-events-none"></canvas>
+            @if (isEditingText() && textEditingState(); as state) {
+              <textarea #textInput
+                        id="text-input-area"
+                        class="absolute bg-white/80 border border-dashed border-blue-500 text-black p-0.5 focus:outline-none resize-none overflow-hidden"
+                        [style.left.px]="state.x"
+                        [style.top.px]="state.y"
+                        [style.width.px]="state.width"
+                        [style.font-family]="getCanvasFontFamily(textSettings().font)"
+                        [style.font-size.px]="textSettings().size * scale()"
+                        [style.font-weight]="textSettings().bold ? 'bold' : 'normal'"
+                        [style.color]="textSettings().color"
+                        [style.line-height]="1.2"
+                        [value]="state.text"
+                        (input)="onTextInput($event)"
+                        (blur)="finalizeTextAnnotation()"
+                        (keydown.escape)="cancelTextAnnotation()"
+                        (keydown.enter)="handleTextEnter($event)">
+              </textarea>
+            }
           </div>
         }
       </div>
@@ -497,7 +658,7 @@
 
           <button (click)="fitToPage()" title="ページに合わせる" class="p-2 rounded-full hover:bg-slate-700 transition-colors">
              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm2-1a1 1 0 00-1 1v2h12V5a1 1 0 00-1-1H5zM4 15a1 1 0 001 1h10a1 1 0 001-1v-2-H4v2z" clip-rule="evenodd" />
+              <path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm2-1a1 1 0 00-1 1v2h12V5a1 1 0 00-1-1H5zM4 15a1 1 0 001 1h10a1 1 0 001-1v-2 H4v2z" clip-rule="evenodd" />
             </svg>
           </button>
         </div>

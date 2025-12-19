@@ -4,6 +4,13 @@ import { Component, ChangeDetectionStrategy, signal, computed, ElementRef, after
 declare var pdfjsLib: any;
 declare var PDFLib: any;
 
+interface TextSettings {
+  font: string;
+  size: number;
+  color: string;
+  bold: boolean;
+}
+
 interface TextAnnotation {
   type: 'text';
   x: number;
@@ -11,6 +18,10 @@ interface TextAnnotation {
   text: string;
   size: number;
   color: string;
+  font: string;
+  bold: boolean;
+  width: number;
+  height: number;
 }
 
 interface DrawAnnotation {
@@ -73,10 +84,11 @@ export class AppComponent {
   scale = signal(1.5);
 
   // UI state
-  activeTab = signal<'edit' | 'organize'>('edit');
+  activeTab = signal<'edit' | 'organize' | 'security'>('edit');
   activeTool = signal<'select' | 'text' | 'draw'>('select');
   isSaving = signal(false);
   isPageNumberPanelOpen = signal(false);
+  isPreviewPanelCollapsed = signal(false);
   
   // Page Number Settings
   pageNumberSettings = signal<PageNumberSettings>({ visible: false, position: 'bottom-center', margin: 'medium', startPage: 1 });
@@ -114,12 +126,19 @@ export class AppComponent {
   private signatureRedoStack = signal<{ path: {x: number, y: number}[], color: string }[][]>([]);
   canUndoSignature = computed(() => this.signatureUndoStack().length > 0);
   canRedoSignature = computed(() => this.signatureRedoStack().length > 0);
+  
+  // Password Protection State
+  isPasswordModalOpen = signal(false);
+  password = signal('');
+  confirmPassword = signal('');
+  passwordError = signal<string | null>(null);
 
 
   // Page order and drag/drop
   pageOrder = signal<number[]>([]); 
   draggedPageIndex = signal<number>(-1);
   dragOverIndex = signal<number>(-1);
+  private dragScrollInterval: any = null;
 
   // PDF insertion
   insertionIndex = signal<number>(0);
@@ -131,8 +150,23 @@ export class AppComponent {
   currentDrawingPath: { x: number; y: number }[] = [];
   private imageCache = new Map<string, HTMLImageElement>();
   
+  // Text Editing State
+  isEditingText = signal(false);
+  textEditingState = signal<{x: number, y: number, width: number, text: string} | null>(null);
+  textSettings = signal<TextSettings>({ font: 'Helvetica', size: 16, color: '#000000', bold: false });
+
+
   // Interactive annotation state
   selectedAnnotationIndex = signal<number>(-1);
+  selectedAnnotation = computed(() => {
+    const pageIndex = this.pageOrder().indexOf(this.currentPageNum());
+    const annIndex = this.selectedAnnotationIndex();
+    if (pageIndex > -1 && annIndex > -1) {
+      return this.annotations()[pageIndex][annIndex];
+    }
+    return null;
+  });
+  isTextToolbarVisible = computed(() => this.activeTool() === 'text' || this.selectedAnnotation()?.type === 'text');
   hoveredAnnotationInfo = signal<{index: number; part: 'body' | 'resize'} | null>(null);
   dragMode: DragMode = 'none';
   dragStartPos = { x: 0, y: 0 };
@@ -149,10 +183,12 @@ export class AppComponent {
   pdfCanvasRef = viewChild<ElementRef<HTMLCanvasElement>>('pdfCanvas');
   drawCanvasRef = viewChild<ElementRef<HTMLCanvasElement>>('drawCanvas');
   signatureCanvasRef = viewChild<ElementRef<HTMLCanvasElement>>('signatureCanvas');
+  textInputRef = viewChild<ElementRef<HTMLTextAreaElement>>('textInput');
   thumbnailCanvases = viewChildren<ElementRef<HTMLCanvasElement>>('thumbnailCanvas');
   insertPdfInputRef = viewChild.required<ElementRef<HTMLInputElement>>('insertPdfInput');
   imageInputRef = viewChild.required<ElementRef<HTMLInputElement>>('imageInput');
   viewerContainerRef = viewChild.required<ElementRef<HTMLDivElement>>('viewerContainer');
+  previewPanel = viewChild.required<ElementRef<HTMLElement>>('previewPanel');
   
   private pdfRenderTask: any = null;
   private thumbnailRenderTasks = new Map<HTMLCanvasElement, any>();
@@ -165,21 +201,18 @@ export class AppComponent {
     effect(() => {
       const pdf = this.pdfDoc();
       const pageNum = this.currentPageNum();
-      this.scale();
-      if (pdf && pageNum > 0 && pageNum <= pdf.numPages) this.renderPage(pageNum);
+      this.scale(); // dependency
+      if (pdf && pageNum > 0 && pageNum <= pdf.numPages) {
+        this.renderPage(pageNum);
+      }
     });
 
-    effect((onCleanup) => {
-      onCleanup(() => {
-        this.thumbnailRenderTasks.forEach(task => task?.cancel());
-        this.thumbnailRenderTasks.clear();
-      });
-
+    effect(() => {
       const allCanvases = this.thumbnailCanvases();
       const pdf = this.pdfDoc();
       
       if (pdf && allCanvases.length > 0) {
-        const canvasMap = new Map(allCanvases.map(c => [c.nativeElement.id, c.nativeElement]));
+        const canvasMap = new Map<string, HTMLCanvasElement>(allCanvases.map(c => [c.nativeElement.id, c.nativeElement]));
         for (const pageNum of this.pageOrder()) {
           const canvasEl = canvasMap.get('thumb-canvas-' + pageNum);
           if (canvasEl) {
@@ -190,14 +223,9 @@ export class AppComponent {
     });
 
     effect(() => {
-      const sigCanvas = this.signatureCanvasRef()?.nativeElement;
-      if (sigCanvas && this.isSignatureModalOpen()) {
-        const parent = sigCanvas.parentElement;
-        if(parent) {
-          sigCanvas.width = parent.clientWidth;
-          sigCanvas.height = parent.clientHeight;
-          this.drawSignaturePad();
-        }
+      const textInput = this.textInputRef();
+      if (textInput) {
+        textInput.nativeElement.focus();
       }
     });
   }
@@ -275,15 +303,38 @@ export class AppComponent {
 
     try {
       const page = await pdf.getPage(num);
-      const viewport = page.getViewport({ scale: this.scale() });
-      const pdfCanvas = pdfCanvasRef.nativeElement, drawCanvas = drawCanvasRef.nativeElement, container = pdfCanvas.parentElement;
+      const pixelRatio = window.devicePixelRatio || 1;
+      const viewport = page.getViewport({ scale: this.scale() * pixelRatio });
+
+      const pdfCanvas = pdfCanvasRef.nativeElement;
+      const drawCanvas = drawCanvasRef.nativeElement;
+      const container = pdfCanvas.parentElement;
+
+      const canvasWidth = viewport.width;
+      const canvasHeight = viewport.height;
+      
+      const cssWidth = canvasWidth / pixelRatio;
+      const cssHeight = canvasHeight / pixelRatio;
+
       if (container) {
-          container.style.width = `${viewport.width}px`;
-          container.style.height = `${viewport.height}px`;
+          container.style.width = `${cssWidth}px`;
+          container.style.height = `${cssHeight}px`;
       }
-      pdfCanvas.height = viewport.height; pdfCanvas.width = viewport.width;
-      drawCanvas.height = viewport.height; drawCanvas.width = viewport.width;
-      this.pdfRenderTask = page.render({ canvasContext: pdfCanvas.getContext('2d')!, viewport });
+
+      pdfCanvas.width = canvasWidth;
+      pdfCanvas.height = canvasHeight;
+      pdfCanvas.style.width = `${cssWidth}px`;
+      pdfCanvas.style.height = `${cssHeight}px`;
+
+      drawCanvas.width = canvasWidth;
+      drawCanvas.height = canvasHeight;
+      drawCanvas.style.width = `${cssWidth}px`;
+      drawCanvas.style.height = `${cssHeight}px`;
+      
+      this.pdfRenderTask = page.render({ 
+        canvasContext: pdfCanvas.getContext('2d')!, 
+        viewport 
+      });
       await this.pdfRenderTask.promise;
       this.drawAnnotations();
     } catch (error) {
@@ -299,10 +350,12 @@ export class AppComponent {
     let renderTask: any;
     try {
       const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 0.25 });
+      const pixelRatio = window.devicePixelRatio || 1;
+      const viewport = page.getViewport({ scale: 0.25 * pixelRatio });
       canvas.height = viewport.height;
       canvas.width = viewport.width;
-      const context = canvas.getContext('2d')!;
+      const context = canvas.getContext('2d');
+      if (!context) return;
       context.clearRect(0, 0, canvas.width, canvas.height);
       
       renderTask = page.render({ canvasContext: context, viewport });
@@ -326,9 +379,13 @@ export class AppComponent {
     context.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
     const pageIndex = this.pageOrder().indexOf(this.currentPageNum()); if (pageIndex === -1) return;
     const pageAnnotations = this.annotations()[pageIndex] || [];
-    const currentScale = this.scale();
+    const pixelRatio = window.devicePixelRatio || 1;
+    const currentScale = this.scale() * pixelRatio;
 
     for (const [i, ann] of pageAnnotations.entries()) {
+      if (this.isEditingText() && this.selectedAnnotationIndex() === i) {
+        continue; // Skip drawing the annotation being edited
+      }
       if (ann.type === 'image') {
         let img = this.imageCache.get(ann.imageData);
         if (!img) {
@@ -341,20 +398,31 @@ export class AppComponent {
           context.drawImage(img, ann.x * currentScale, ann.y * currentScale, ann.width * currentScale, ann.height * currentScale);
           if (this.selectedAnnotationIndex() === i) {
             context.strokeStyle = 'blue';
-            context.lineWidth = 2;
+            context.lineWidth = 2 * pixelRatio;
             context.strokeRect(ann.x * currentScale, ann.y * currentScale, ann.width * currentScale, ann.height * currentScale);
-            const handleSize = 10;
+            const handleSize = 10 * pixelRatio;
             context.fillStyle = 'white';
             context.fillRect(ann.x * currentScale + ann.width * currentScale - handleSize / 2, ann.y * currentScale + ann.height * currentScale - handleSize / 2, handleSize, handleSize);
             context.strokeRect(ann.x * currentScale + ann.width * currentScale - handleSize / 2, ann.y * currentScale + ann.height * currentScale - handleSize / 2, handleSize, handleSize);
           }
         }
       } else if (ann.type === 'text') {
-        context.font = `${ann.size * currentScale}px sans-serif`;
+        context.font = `${ann.bold ? 'bold ' : ''}${ann.size * currentScale}px ${this.getCanvasFontFamily(ann.font)}`;
         context.fillStyle = ann.color;
         context.textBaseline = 'top';
-        context.fillText(ann.text, ann.x * currentScale, ann.y * currentScale);
-        context.textBaseline = 'alphabetic'; // Reset to default
+
+        const lines = ann.text.split('\n');
+        const lineHeight = ann.size * 1.2 * currentScale;
+        lines.forEach((line, index) => {
+            context.fillText(line, ann.x * currentScale, ann.y * currentScale + (index * lineHeight));
+        });
+
+        if (this.selectedAnnotationIndex() === i) {
+            context.strokeStyle = 'rgba(0, 0, 255, 0.7)';
+            context.lineWidth = 1 * pixelRatio;
+            context.strokeRect(ann.x * currentScale, ann.y * currentScale, ann.width * currentScale, ann.height * currentScale);
+        }
+        context.textBaseline = 'alphabetic'; // Reset
       } else if (ann.type === 'draw' && ann.path.length > 1) {
         context.beginPath();
         context.moveTo(ann.path[0].x * currentScale, ann.path[0].y * currentScale);
@@ -370,9 +438,10 @@ export class AppComponent {
     if (settings.visible) {
         const displayPageIndex = this.pageOrder().indexOf(this.currentPageNum()); if (displayPageIndex === -1) return;
         const pageNumText = `${displayPageIndex + settings.startPage}`;
-        const fontSize = 12 * this.scale();
+        const fontSize = 12 * this.scale() * pixelRatio;
         context.font = `${fontSize}px sans-serif`; context.fillStyle = 'black';
-        const marginValues = { small: 18, medium: 36, large: 54 }, margin = marginValues[settings.margin] * this.scale();
+        const marginValues = { small: 18, medium: 36, large: 54 };
+        const margin = marginValues[settings.margin] * this.scale() * pixelRatio;
         let x = 0, y = 0;
         if (settings.position.includes('left')) { context.textAlign = 'left'; x = margin; } 
         else if (settings.position.includes('center')) { context.textAlign = 'center'; x = drawCanvas.width / 2; } 
@@ -390,7 +459,7 @@ export class AppComponent {
         context.beginPath();
         const pathInPixels = this.currentDrawingPath.map(p => ({ x: p.x * currentScale, y: p.y * currentScale }));
         pathInPixels.forEach((p, i) => i === 0 ? context.moveTo(p.x, p.y) : context.lineTo(p.x, p.y));
-        context.strokeStyle = 'red'; context.lineWidth = 2; context.stroke();
+        context.strokeStyle = 'red'; context.lineWidth = 2 * pixelRatio; context.stroke();
     }
   }
 
@@ -401,6 +470,7 @@ export class AppComponent {
     const drawCanvas = this.drawCanvasRef()?.nativeElement;
     if (!drawCanvas) return;
     const context = drawCanvas.getContext('2d')!;
+    const pixelRatio = window.devicePixelRatio || 1;
 
     context.save();
 
@@ -408,14 +478,14 @@ export class AppComponent {
     const centerY = drawCanvas.height / 2;
     
     context.translate(centerX, centerY);
-    context.rotate(-Math.PI / 4); // -45 degrees, which is counter-clockwise in canvas
+    context.rotate(-Math.PI / 4); // -45 degrees, counter-clockwise
     context.translate(-centerX, -centerY);
 
     const fontFamily = this.getCanvasFontFamily(settings.font);
     const fontWeight = settings.font.includes('Bold') ? 'bold' : 'normal';
     
     context.globalAlpha = settings.opacity;
-    context.font = `${fontWeight} ${settings.size * (this.scale() / 1.5)}px ${fontFamily}`;
+    context.font = `${fontWeight} ${settings.size * (this.scale() / 1.5) * pixelRatio}px ${fontFamily}`;
     context.fillStyle = settings.color;
     context.textAlign = 'center';
     context.textBaseline = 'middle';
@@ -431,6 +501,8 @@ export class AppComponent {
     if (fontId.includes('Courier')) return '"Courier New", Courier, monospace';
     return 'Arial, Helvetica, sans-serif';
   }
+
+  togglePreviewPanel = () => this.isPreviewPanelCollapsed.update(v => !v);
 
   togglePageNumberPanel(): void {
     this.isPageNumberPanelOpen.update(v => !v);
@@ -473,7 +545,7 @@ export class AppComponent {
   goToPrevPage = () => { if (this.pageOrder().indexOf(this.currentPageNum()) > 0) this.goToPage(this.pageOrder().indexOf(this.currentPageNum())); };
   goToNextPage = () => { if (this.pageOrder().indexOf(this.currentPageNum()) < this.pageOrder().length - 1) this.goToPage(this.pageOrder().indexOf(this.currentPageNum()) + 2); };
   
-  selectTab = (tab: 'edit' | 'organize') => this.activeTab.set(tab);
+  selectTab = (tab: 'edit' | 'organize' | 'security') => this.activeTab.set(tab);
   selectTool = (tool: 'select' | 'text' | 'draw') => { this.activeTool.set(tool); this.selectedAnnotationIndex.set(-1); };
 
   addImage(): void { if (!this.isPdfLoaded()) return; this.imageInputRef().nativeElement.value = ''; this.imageInputRef().nativeElement.click(); }
@@ -507,8 +579,8 @@ export class AppComponent {
         
         this.addAnnotation({
           type: 'image', 
-          x: (drawCanvas.width / scale - pointWidth) / 2, 
-          y: (drawCanvas.height / scale - pointHeight) / 2,
+          x: (drawCanvas.clientWidth / scale - pointWidth) / 2, 
+          y: (drawCanvas.clientHeight / scale - pointHeight) / 2,
           width: pointWidth, 
           height: pointHeight, 
           imageData, 
@@ -530,147 +602,93 @@ export class AppComponent {
   };
 
   onMouseDown(event: MouseEvent) {
-    if (this.activeTab() !== 'edit' || this.isPageNumberPanelOpen()) return;
-    const pos = this.getMousePos(event, this.drawCanvasRef()?.nativeElement); if (!pos) return;
+    if (this.isEditingText() || this.activeTab() !== 'edit' || this.isPageNumberPanelOpen()) return;
+    
+    const pos = this.getMousePos(event, this.pdfCanvasRef()?.nativeElement);
+    if (!pos) return;
+
     const posUnscaled = { x: pos.x / this.scale(), y: pos.y / this.scale() };
-    const pageIndex = this.pageOrder().indexOf(this.currentPageNum()); if (pageIndex === -1) return;
+    const pageIndex = this.pageOrder().indexOf(this.currentPageNum());
+    if (pageIndex === -1) return;
     const pageAnns = this.annotations()[pageIndex];
 
-    // Check for annotation selection (reverse order for Z-index)
     let newSelection: number = -1;
     for (let i = pageAnns.length - 1; i >= 0; i--) {
-      const ann = pageAnns[i];
-      if (ann.type === 'image') {
-        const handleSize = 10 / this.scale();
-        const handleRect = { x: ann.x + ann.width - handleSize/2, y: ann.y + ann.height - handleSize/2, width: handleSize, height: handleSize };
-        if (posUnscaled.x >= handleRect.x && posUnscaled.x <= handleRect.x + handleRect.width && posUnscaled.y >= handleRect.y && posUnscaled.y <= handleRect.y + handleRect.height) {
-          this.dragMode = 'resize';
-          newSelection = i;
-          break;
+        const ann = pageAnns[i];
+        const annRect = { x: ann.x, y: ann.y, width: ann.width, height: ann.height };
+        if (ann.type === 'image') {
+            const handleSize = 10 / this.scale();
+            const handleRect = { x: ann.x + ann.width - handleSize/2, y: ann.y + ann.height - handleSize/2, width: handleSize, height: handleSize };
+            if (posUnscaled.x >= handleRect.x && posUnscaled.x <= handleRect.x + handleRect.width && posUnscaled.y >= handleRect.y && posUnscaled.y <= handleRect.y + handleRect.height) {
+                this.dragMode = 'resize'; newSelection = i; break;
+            }
         }
-        if (posUnscaled.x >= ann.x && posUnscaled.x <= ann.x + ann.width && posUnscaled.y >= ann.y && posUnscaled.y <= ann.y + ann.height) {
-          this.dragMode = 'move';
-          newSelection = i;
-          break;
+        if (posUnscaled.x >= annRect.x && posUnscaled.x <= annRect.x + annRect.width && posUnscaled.y >= annRect.y && posUnscaled.y <= annRect.y + annRect.height) {
+            this.dragMode = (ann.type === 'image' || ann.type === 'text') ? 'move' : 'none';
+            newSelection = i; 
+            break;
         }
-      }
     }
-
+    
     if (newSelection > -1) {
-      this.activeTool.set('select');
-      this.selectedAnnotationIndex.set(newSelection);
-      const ann = pageAnns[newSelection];
-      this.dragStartPos = posUnscaled;
-      if (ann.type === 'image') {
-        this.dragStartAnn = { x: ann.x, y: ann.y, width: ann.width, height: ann.height };
-      }
-    } else {
-      this.selectedAnnotationIndex.set(-1);
-      if (this.activeTool() === 'draw') {
-        this.isDrawing = true; 
-        this.currentDrawingPath = [posUnscaled];
-      } else if (this.activeTool() === 'text') {
-        const text = prompt('テキストを入力してください:');
-        if (text) {
-          const sizeInPoints = 16 / this.scale();
-          this.addAnnotation({ type: 'text', text, x: posUnscaled.x, y: posUnscaled.y, size: sizeInPoints, color: 'blue'});
+        this.activeTool.set('select');
+        this.selectedAnnotationIndex.set(newSelection);
+        const ann = pageAnns[newSelection];
+        this.dragStartPos = posUnscaled;
+        if (ann.type === 'image' || ann.type === 'text') {
+            this.dragStartAnn = { x: ann.x, y: ann.y, width: ann.width, height: ann.height };
         }
-      }
+        if (ann.type === 'text') {
+            this.textSettings.set({ font: ann.font, size: ann.size, color: ann.color, bold: ann.bold });
+        }
+    } else {
+        this.selectedAnnotationIndex.set(-1);
+        if (this.activeTool() === 'draw') {
+            this.isDrawing = true; this.currentDrawingPath = [posUnscaled];
+        } else if (this.activeTool() === 'text') {
+            this.isEditingText.set(true);
+            this.textEditingState.set({ x: pos.x, y: pos.y, width: 150, text: '' });
+        }
     }
   }
 
   onMouseMove(event: MouseEvent) {
-    // 1. Handle drag in progress
+    if (this.dragMode === 'none' && !this.isDrawing) return;
+    const pos = this.getMousePos(event, this.pdfCanvasRef()?.nativeElement);
+    if (!pos) return;
+    
     if (this.dragMode !== 'none') {
-      const pos = this.getMousePos(event, this.drawCanvasRef()?.nativeElement);
-      if (!pos) return;
-      const posUnscaled = { x: pos.x / this.scale(), y: pos.y / this.scale() };
-      const annIndex = this.selectedAnnotationIndex();
-      const pageIndex = this.pageOrder().indexOf(this.currentPageNum());
-      if (annIndex === -1 || pageIndex === -1) return;
-      const dx = posUnscaled.x - this.dragStartPos.x;
-      const dy = posUnscaled.y - this.dragStartPos.y;
+        const posUnscaled = { x: pos.x / this.scale(), y: pos.y / this.scale() };
+        const annIndex = this.selectedAnnotationIndex();
+        const pageIndex = this.pageOrder().indexOf(this.currentPageNum());
+        if (annIndex === -1 || pageIndex === -1) return;
+        const dx = posUnscaled.x - this.dragStartPos.x, dy = posUnscaled.y - this.dragStartPos.y;
 
-      this.annotations.update(anns => {
-        const newAnns = [...anns];
-        const pageAnns = [...newAnns[pageIndex]];
-        const ann = { ...pageAnns[annIndex] };
+        this.annotations.update(anns => {
+            const newAnns = [...anns];
+            const pageAnns = [...newAnns[pageIndex]];
+            const ann = { ...pageAnns[annIndex] };
 
-        if (this.dragMode === 'move' && ann.type === 'image') {
-          ann.x = this.dragStartAnn.x + dx;
-          ann.y = this.dragStartAnn.y + dy;
-        } else if (this.dragMode === 'resize' && ann.type === 'image') {
-          const newWidth = this.dragStartAnn.width + dx;
-          if (newWidth > 10) {
-            ann.width = newWidth;
-            ann.height = newWidth * ann.originalAspectRatio;
-          }
-        }
-        pageAnns[annIndex] = ann;
-        newAnns[pageIndex] = pageAnns;
-        return newAnns;
-      });
-      this.drawAnnotations();
-      return;
-    }
-
-    // 2. Handle drawing in progress
-    if (this.isDrawing && this.activeTool() === 'draw') {
-      const pos = this.getMousePos(event, this.drawCanvasRef()?.nativeElement);
-      if (pos) {
+            if (this.dragMode === 'move' && (ann.type === 'image' || ann.type === 'text')) {
+                ann.x = this.dragStartAnn.x + dx;
+                ann.y = this.dragStartAnn.y + dy;
+            } else if (this.dragMode === 'resize' && ann.type === 'image') {
+                const newWidth = this.dragStartAnn.width + dx;
+                if (newWidth > 10) { ann.width = newWidth; ann.height = newWidth * ann.originalAspectRatio; }
+            }
+            pageAnns[annIndex] = ann; newAnns[pageIndex] = pageAnns; return newAnns;
+        });
+        this.drawAnnotations();
+    } else if (this.isDrawing) {
         const posUnscaled = { x: pos.x / this.scale(), y: pos.y / this.scale() };
         this.currentDrawingPath.push(posUnscaled);
         this.drawAnnotations();
-      }
-      return;
-    }
-    
-    // 3. Handle hover detection (if not dragging or drawing)
-    if (this.activeTab() === 'edit' && !this.isPageNumberPanelOpen()) {
-        const pos = this.getMousePos(event, this.drawCanvasRef()?.nativeElement);
-        if (!pos) {
-            if (this.hoveredAnnotationInfo() !== null) this.hoveredAnnotationInfo.set(null);
-            return;
-        }
-        const posUnscaled = { x: pos.x / this.scale(), y: pos.y / this.scale() };
-        const pageIndex = this.pageOrder().indexOf(this.currentPageNum());
-        if (pageIndex === -1) {
-            if (this.hoveredAnnotationInfo() !== null) this.hoveredAnnotationInfo.set(null);
-            return;
-        }
-
-        const pageAnns = this.annotations()[pageIndex];
-        let foundHover: {index: number; part: 'body' | 'resize'} | null = null;
-
-        for (let i = pageAnns.length - 1; i >= 0; i--) {
-            const ann = pageAnns[i];
-            if (ann.type === 'image') {
-                const handleSize = 10 / this.scale();
-                const handleRect = { x: ann.x + ann.width - handleSize / 2, y: ann.y + ann.height - handleSize / 2, width: handleSize, height: handleSize };
-                if (posUnscaled.x >= handleRect.x && posUnscaled.x <= handleRect.x + handleRect.width &&
-                    posUnscaled.y >= handleRect.y && posUnscaled.y <= handleRect.y + handleRect.height) {
-                    foundHover = { index: i, part: 'resize' };
-                    break;
-                }
-                if (posUnscaled.x >= ann.x && posUnscaled.x <= ann.x + ann.width &&
-                    posUnscaled.y >= ann.y && posUnscaled.y <= ann.y + ann.height) {
-                    foundHover = { index: i, part: 'body' };
-                    break;
-                }
-            }
-        }
-        
-        if (this.hoveredAnnotationInfo()?.index !== foundHover?.index || this.hoveredAnnotationInfo()?.part !== foundHover?.part) {
-            this.hoveredAnnotationInfo.set(foundHover);
-        }
     }
   }
 
   onMouseUp() {
-    if (this.dragMode !== 'none') {
-      this.dragMode = 'none';
-    }
-    if (this.isDrawing && this.activeTool() === 'draw') {
+    this.dragMode = 'none';
+    if (this.isDrawing) {
       this.isDrawing = false;
       if(this.currentDrawingPath.length > 1) {
         const lineWidthInPoints = 2 / this.scale();
@@ -680,9 +698,47 @@ export class AppComponent {
     }
   }
 
-  onMouseLeave = () => {
-    this.onMouseUp();
-    this.hoveredAnnotationInfo.set(null);
+  onMouseLeave = () => this.onMouseUp();
+
+  onDblClick(event: MouseEvent) {
+    if (this.activeTab() !== 'edit' || this.isPageNumberPanelOpen()) return;
+
+    const pos = this.getMousePos(event, this.pdfCanvasRef()?.nativeElement);
+    if (!pos) return;
+
+    const posUnscaled = { x: pos.x / this.scale(), y: pos.y / this.scale() };
+    const pageIndex = this.pageOrder().indexOf(this.currentPageNum());
+    if (pageIndex === -1) return;
+    
+    const pageAnns = this.annotations()[pageIndex];
+    let editIndex = -1;
+
+    for (let i = pageAnns.length - 1; i >= 0; i--) {
+        const ann = pageAnns[i];
+        if (ann.type === 'text') {
+            if (posUnscaled.x >= ann.x && posUnscaled.x <= ann.x + ann.width &&
+                posUnscaled.y >= ann.y && posUnscaled.y <= ann.y + ann.height) {
+                editIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (editIndex > -1) {
+        const annToEdit = pageAnns[editIndex] as TextAnnotation;
+        this.selectedAnnotationIndex.set(editIndex);
+        this.textSettings.set({ font: annToEdit.font, size: annToEdit.size, color: annToEdit.color, bold: annToEdit.bold });
+        
+        this.isEditingText.set(true);
+        this.textEditingState.set({
+            x: annToEdit.x * this.scale(),
+            y: annToEdit.y * this.scale(),
+            width: annToEdit.width * this.scale() + 20, // Add some padding
+            text: annToEdit.text
+        });
+        
+        this.drawAnnotations(); // Redraw to hide the annotation being edited
+    }
   }
 
   addAnnotation(annotation: Annotation) {
@@ -698,11 +754,12 @@ export class AppComponent {
   
   onDeleteKeyPressed(): void {
     const annIndex = this.selectedAnnotationIndex();
-    const pageIndex = this.pageOrder().indexOf(this.currentPageNum());
-    if (annIndex > -1 && pageIndex !== -1) {
+    if (annIndex > -1) {
         this.undoStack.update(stack => [...stack, JSON.parse(JSON.stringify(this.annotations()))]);
         this.redoStack.set([]);
         this.annotations.update(anns => {
+            const pageIndex = this.pageOrder().indexOf(this.currentPageNum());
+            if(pageIndex === -1) return anns;
             const newAnns = [...anns];
             const pageAnns = [...newAnns[pageIndex]];
             pageAnns.splice(annIndex, 1);
@@ -732,7 +789,11 @@ export class AppComponent {
   }
 
   onDragStart = (index: number) => this.draggedPageIndex.set(index);
-  onDragEnd = () => { this.draggedPageIndex.set(-1); this.dragOverIndex.set(-1); }
+  onDragEnd = () => { 
+    this.draggedPageIndex.set(-1); 
+    this.dragOverIndex.set(-1);
+    this.clearDragScroll();
+  }
   onDragOver = (event: DragEvent, index: number) => { event.preventDefault(); this.dragOverIndex.set(index); };
   onDragLeave = () => this.dragOverIndex.set(-1);
   onDrop = (dropIndex: number) => { const dragIndex = this.draggedPageIndex(); if (dragIndex > -1) this.reorderPages(dragIndex, dropIndex); this.onDragEnd(); }
@@ -741,6 +802,39 @@ export class AppComponent {
       const adjustedDropIndex = dragIndex < dropIndex ? dropIndex - 1 : dropIndex;
       this.pageOrder.update(currentOrder => { const newOrder = [...currentOrder], [movedPage] = newOrder.splice(dragIndex, 1); newOrder.splice(adjustedDropIndex, 0, movedPage); return newOrder; });
       this.annotations.update(currentAnns => { const newAnns = [...currentAnns], [movedAnn] = newAnns.splice(dragIndex, 1); newAnns.splice(adjustedDropIndex, 0, movedAnn); return newAnns; });
+  }
+
+  handleDragScroll(event: DragEvent): void {
+    const panel = this.previewPanel().nativeElement;
+    const rect = panel.getBoundingClientRect();
+    
+    const y = event.clientY - rect.top;
+    const scrollZone = 50;
+    const scrollSpeed = 10;
+    const intervalTime = 25;
+  
+    if (y < scrollZone) {
+      if (!this.dragScrollInterval) { // Only set if not already scrolling
+        this.dragScrollInterval = setInterval(() => {
+          panel.scrollTop -= scrollSpeed;
+        }, intervalTime);
+      }
+    } else if (y > rect.height - scrollZone) {
+      if (!this.dragScrollInterval) { // Only set if not already scrolling
+        this.dragScrollInterval = setInterval(() => {
+          panel.scrollTop += scrollSpeed;
+        }, intervalTime);
+      }
+    } else {
+      this.clearDragScroll(); // In the safe zone, clear interval
+    }
+  }
+  
+  clearDragScroll(): void {
+    if (this.dragScrollInterval) {
+      clearInterval(this.dragScrollInterval);
+      this.dragScrollInterval = null;
+    }
   }
 
   promptInsertPdf(index: number): void { const input = this.insertPdfInputRef()?.nativeElement; if (!input) return; this.insertionIndex.set(index); input.value = ''; input.click(); }
@@ -773,14 +867,27 @@ export class AppComponent {
   }
 
   private confirmAndProceedWithOrganize = async (action: () => Promise<void>): Promise<void> => { if (this.annotations().some(p => p.length > 0) && !confirm('この操作を実行すると、追加した注釈は失われます。よろしいですか？')) return; await action(); }
-  async rotatePage(degrees: 90 | -90) { await this.confirmAndProceedWithOrganize(async () => {
-    const pdfLibDoc = this.pdfLibDoc(); if (!pdfLibDoc) return; this.isSaving.set(true);
-    try {
-        const { degrees: degreesFn } = PDFLib; const page = pdfLibDoc.getPage(this.currentPageNum() - 1);
+  
+  async rotatePage(degrees: 90 | -90, pageNumToRotate?: number) {
+    const pageToRotate = pageNumToRotate ?? this.currentPageNum();
+    await this.confirmAndProceedWithOrganize(async () => {
+      const pdfLibDoc = this.pdfLibDoc();
+      if (!pdfLibDoc) return;
+      this.isSaving.set(true);
+      try {
+        const { degrees: degreesFn } = PDFLib;
+        const page = pdfLibDoc.getPage(pageToRotate - 1);
         page.setRotation(degreesFn(page.getRotation().angle + degrees));
         await this.loadPdf(await pdfLibDoc.save(), true, this.currentPageNum());
-    } catch (e) { console.error('Error rotating page:', e); alert('ページの回転に失敗しました。'); } finally { this.isSaving.set(false); }
-  });}
+      } catch (e) {
+        console.error('Error rotating page:', e);
+        alert('ページの回転に失敗しました。');
+      } finally {
+        this.isSaving.set(false);
+      }
+    });
+  }
+
   async deletePage(pageNumToDelete: number) {
     if (this.totalPages() <= 1) { alert('最後のページは削除できません。'); return; }
     await this.confirmAndProceedWithOrganize(async () => {
@@ -790,6 +897,30 @@ export class AppComponent {
             const newPageNum = Math.min(pageNumToDelete, pdfLibDoc.getPageCount());
             await this.loadPdf(await pdfLibDoc.save(), true, newPageNum);
         } catch (e) { console.error('Error deleting page:', e); alert('ページの削除に失敗しました。'); } finally { this.isSaving.set(false); }
+    });
+  }
+  async duplicatePage(pageNumToDuplicate: number) {
+    await this.confirmAndProceedWithOrganize(async () => {
+      const pdfLibDoc = this.pdfLibDoc();
+      if (!pdfLibDoc) return;
+  
+      this.isSaving.set(true);
+      try {
+        const pageIndexToDuplicate = pageNumToDuplicate - 1;
+        const [copiedPage] = await pdfLibDoc.copyPages(pdfLibDoc, [pageIndexToDuplicate]);
+        pdfLibDoc.insertPage(pageIndexToDuplicate + 1, copiedPage);
+  
+        const pdfBytes = await pdfLibDoc.save();
+        const newCurrentPage = pageIndexToDuplicate + 2; 
+  
+        await this.loadPdf(pdfBytes, true, newCurrentPage);
+  
+      } catch (e) {
+        console.error('Error duplicating page:', e);
+        alert('ページの複製に失敗しました。');
+      } finally {
+        this.isSaving.set(false);
+      }
     });
   }
   async extractPage() {
@@ -807,6 +938,122 @@ export class AppComponent {
     } catch (e) { console.error('Error extracting page:', e); alert('ページの抽出に失敗しました。'); } finally { this.isSaving.set(false); }
   }
 
+  // --- Text Methods ---
+  onTextInput(event: Event) {
+    const textarea = event.target as HTMLTextAreaElement;
+    this.textEditingState.update(state => state ? {...state, text: textarea.value} : null);
+    textarea.style.height = 'auto'; // Reset height
+    textarea.style.height = `${textarea.scrollHeight}px`; // Set to scroll height
+  }
+  
+  finalizeTextAnnotation() {
+    if (!this.isEditingText()) return;
+    const state = this.textEditingState();
+    if (!state || !state.text.trim()) {
+      this.cancelTextAnnotation();
+      return;
+    }
+
+    const settings = this.textSettings();
+    const { width, height } = this.measureText(state.text, settings);
+    const trimmedText = state.text.trim();
+    
+    const editIndex = this.selectedAnnotationIndex();
+    const pageIndex = this.pageOrder().indexOf(this.currentPageNum());
+    const annToEdit = (editIndex > -1 && pageIndex > -1) ? this.annotations()[pageIndex][editIndex] : null;
+    
+    const pixelRatio = window.devicePixelRatio || 1;
+    const totalScale = this.scale() * pixelRatio;
+
+    if (annToEdit && annToEdit.type === 'text') {
+      this.undoStack.update(stack => [...stack, JSON.parse(JSON.stringify(this.annotations()))]);
+      this.redoStack.set([]);
+      this.annotations.update(anns => {
+        const newAnns = [...anns];
+        const pageAnns = [...newAnns[pageIndex]];
+        pageAnns[editIndex] = {
+          ...annToEdit,
+          text: trimmedText,
+          ...settings,
+          width: width / totalScale,
+          height: height / totalScale,
+        };
+        newAnns[pageIndex] = pageAnns;
+        return newAnns;
+      });
+    } else {
+      this.addAnnotation({
+        type: 'text', text: trimmedText,
+        x: state.x / this.scale(), y: state.y / this.scale(),
+        ...settings,
+        width: width / totalScale, height: height / totalScale
+      });
+    }
+
+    this.isEditingText.set(false);
+    this.textEditingState.set(null);
+    this.drawAnnotations();
+  }
+  
+  cancelTextAnnotation() {
+    this.isEditingText.set(false);
+    this.textEditingState.set(null);
+    this.drawAnnotations();
+  }
+
+  handleTextEnter(event: KeyboardEvent) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.finalizeTextAnnotation();
+    }
+  }
+
+  measureText(text: string, settings: TextSettings): { width: number, height: number } {
+    const drawCanvas = this.drawCanvasRef()?.nativeElement;
+    if (!drawCanvas) return { width: 100, height: settings.size };
+    const context = drawCanvas.getContext('2d')!;
+    const lines = text.split('\n');
+    const pixelRatio = window.devicePixelRatio || 1;
+    const currentScale = this.scale() * pixelRatio;
+    const font = `${settings.bold ? 'bold ' : ''}${settings.size * currentScale}px ${this.getCanvasFontFamily(settings.font)}`;
+    context.font = font;
+    const lineHeight = settings.size * 1.2 * currentScale;
+    const height = lines.length * lineHeight;
+    const width = Math.max(...lines.map(line => context.measureText(line).width));
+    return { width, height };
+  }
+
+  updateTextSetting(key: keyof TextSettings, value: any) {
+    this.textSettings.update(s => ({ ...s, [key]: value }));
+    
+    const selectedIndex = this.selectedAnnotationIndex();
+    const pageIndex = this.pageOrder().indexOf(this.currentPageNum());
+
+    if (selectedIndex !== -1 && pageIndex !== -1) {
+      this.annotations.update(anns => {
+        const pageAnns = anns[pageIndex];
+        const ann = pageAnns?.[selectedIndex];
+        if (ann?.type === 'text') {
+            const newAnns = [...anns];
+            const newPageAnns = [...pageAnns];
+            const updatedAnn = { ...ann, ...this.textSettings() };
+
+            const { width, height } = this.measureText(updatedAnn.text, updatedAnn);
+            const pixelRatio = window.devicePixelRatio || 1;
+            const totalScale = this.scale() * pixelRatio;
+            updatedAnn.width = width / totalScale;
+            updatedAnn.height = height / totalScale;
+            
+            newPageAnns[selectedIndex] = updatedAnn;
+            newAnns[pageIndex] = newPageAnns;
+            return newAnns;
+        }
+        return anns;
+      });
+      this.drawAnnotations();
+    }
+  }
+
   // --- Signature Methods ---
   openSignatureModal() {
     this.isSignatureModalOpen.set(true);
@@ -814,6 +1061,19 @@ export class AppComponent {
     this.signatureUndoStack.set([]);
     this.signatureRedoStack.set([]);
     this.signatureColor.set('black');
+
+    afterNextRender(() => {
+      const sigCanvas = this.signatureCanvasRef()?.nativeElement;
+      // It's possible the modal was closed before this render hook runs
+      if (sigCanvas && this.isSignatureModalOpen()) {
+        // Use the canvas's own client dimensions to set its resolution.
+        // This ensures the drawing buffer size matches the CSS display size,
+        // correcting coordinate mismatches caused by borders or padding on the parent.
+        sigCanvas.width = sigCanvas.clientWidth;
+        sigCanvas.height = sigCanvas.clientHeight;
+        this.drawSignaturePad();
+      }
+    });
   }
 
   closeSignatureModal() {
@@ -827,6 +1087,7 @@ export class AppComponent {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     for (const stroke of this.signaturePadPaths()) {
+        if (stroke.path.length === 0) continue;
         ctx.beginPath();
         ctx.moveTo(stroke.path[0].x, stroke.path[0].y);
         stroke.path.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
@@ -839,26 +1100,50 @@ export class AppComponent {
   }
 
   onSignatureMouseDown(event: MouseEvent) {
+    const pos = this.getSignatureMousePos(event);
+    if (!pos) return;
+
     this.isSigning = true;
-    const pos = this.getMousePos(event, this.signatureCanvasRef()?.nativeElement);
-    if(pos) this.signaturePadCurrentPath = [pos];
+    this.signaturePadCurrentPath = [pos];
   }
 
   onSignatureMouseMove(event: MouseEvent) {
     if (!this.isSigning) return;
-    const pos = this.getMousePos(event, this.signatureCanvasRef()?.nativeElement);
-    if (pos) {
-      this.signaturePadCurrentPath.push(pos);
-      // For instant feedback, we can draw the current path directly
-      const canvas = this.signatureCanvasRef()?.nativeElement;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d')!;
+    
+    const pos = this.getSignatureMousePos(event);
+    if (!pos) return;
+
+    this.signaturePadCurrentPath.push(pos);
+
+    const canvas = this.signatureCanvasRef()?.nativeElement;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d')!;
+    
+    // Clear and redraw for live preview
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Redraw completed paths
+    for (const stroke of this.signaturePadPaths()) {
+        if (stroke.path.length === 0) continue;
+        ctx.beginPath();
+        ctx.moveTo(stroke.path[0].x, stroke.path[0].y);
+        stroke.path.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+    }
+
+    // Draw current in-progress path
+    if (this.signaturePadCurrentPath.length > 1) {
       ctx.beginPath();
       ctx.moveTo(this.signaturePadCurrentPath[0].x, this.signaturePadCurrentPath[0].y);
       this.signaturePadCurrentPath.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
       ctx.strokeStyle = this.signatureColor();
       ctx.lineWidth = 2;
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
       ctx.stroke();
     }
   }
@@ -883,11 +1168,9 @@ export class AppComponent {
     if (!this.canUndoSignature()) return;
     const currentStack = this.signatureUndoStack();
     const lastState = currentStack[currentStack.length - 1];
-    
     this.signatureRedoStack.update(stack => [...stack, this.signaturePadPaths()]);
     this.signaturePadPaths.set(lastState);
     this.signatureUndoStack.update(stack => stack.slice(0, -1));
-    
     this.drawSignaturePad();
   }
   
@@ -895,16 +1178,16 @@ export class AppComponent {
     if (!this.canRedoSignature()) return;
     const currentStack = this.signatureRedoStack();
     const nextState = currentStack[currentStack.length - 1];
-  
     this.signatureUndoStack.update(stack => [...stack, this.signaturePadPaths()]);
     this.signaturePadPaths.set(nextState);
     this.signatureRedoStack.update(stack => stack.slice(0, -1));
-  
     this.drawSignaturePad();
   }
 
   clearSignature() {
-    this.signatureUndoStack.update(stack => [...stack, this.signaturePadPaths()]);
+    if (this.signaturePadPaths().length > 0) {
+      this.signatureUndoStack.update(stack => [...stack, this.signaturePadPaths()]);
+    }
     this.signatureRedoStack.set([]);
     this.signaturePadPaths.set([]);
     this.drawSignaturePad();
@@ -914,8 +1197,6 @@ export class AppComponent {
     const canvas = this.signatureCanvasRef()?.nativeElement;
     if (!canvas || this.signaturePadPaths().length === 0) return;
 
-    // Trim whitespace
-    const context = canvas.getContext('2d')!;
     const bounds = this.getSignatureBounds(canvas);
     if (!bounds) return;
 
@@ -938,8 +1219,8 @@ export class AppComponent {
 
         this.addAnnotation({
           type: 'image',
-          x: (drawCanvas.width / scale - pointWidth) / 2,
-          y: (drawCanvas.height / scale - pointHeight) / 2,
+          x: (drawCanvas.clientWidth / scale - pointWidth) / 2,
+          y: (drawCanvas.clientHeight / scale - pointHeight) / 2,
           width: pointWidth,
           height: pointHeight,
           imageData,
@@ -950,6 +1231,16 @@ export class AppComponent {
         this.closeSignatureModal();
     };
     img.src = imageData;
+  }
+
+  private getSignatureMousePos(event: MouseEvent): { x: number; y: number } | null {
+    const canvas = this.signatureCanvasRef()?.nativeElement;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
   }
   
   private getSignatureBounds(canvas: HTMLCanvasElement) {
@@ -962,10 +1253,8 @@ export class AppComponent {
       for (let x = 0; x < w; x++) {
         const alpha = imageData[(y * w + x) * 4 + 3];
         if (alpha > 0) {
-          minX = Math.min(minX, x);
-          minY = Math.min(minY, y);
-          maxX = Math.max(maxX, x);
-          maxY = Math.max(maxY, y);
+          minX = Math.min(minX, x); minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
           foundPixel = true;
         }
       }
@@ -973,7 +1262,6 @@ export class AppComponent {
     if (!foundPixel) return null;
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
   }
-
 
   private hexToRgb(hex: string): { r: number; g: number; b: number } {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -983,23 +1271,59 @@ export class AppComponent {
         b: parseInt(result[3], 16) / 255,
     } : { r: 0, g: 0, b: 0 };
   }
+  
+  // --- Password Protection ---
+  openPasswordModal() {
+    this.password.set('');
+    this.confirmPassword.set('');
+    this.passwordError.set(null);
+    this.isPasswordModalOpen.set(true);
+  }
 
-  async savePdf() {
+  closePasswordModal() {
+    this.isPasswordModalOpen.set(false);
+  }
+
+  applyPasswordAndSave() {
+    const pw = this.password();
+    const confirmPw = this.confirmPassword();
+
+    if (!pw) {
+      this.passwordError.set('パスワードを入力してください。');
+      return;
+    }
+    if (pw !== confirmPw) {
+      this.passwordError.set('パスワードが一致しません。');
+      return;
+    }
+
+    this.passwordError.set(null);
+    this.savePdf(pw);
+    this.closePasswordModal();
+  }
+
+  async savePdf(password?: string) {
     const pdfLibDoc = this.pdfLibDoc(); if (!pdfLibDoc) return; this.isSaving.set(true);
     try {
-      const { PDFDocument, rgb, StandardFonts, degrees } = PDFLib;
+      const { PDFDocument, rgb, StandardFonts, degrees, pushGraphicsState, popGraphicsState, translate, rotateDegrees } = PDFLib;
       const newPdfDoc = await PDFDocument.create();
-      const copiedPages = await newPdfDoc.copyPages(pdfLibDoc, this.pageOrder().map(p => p - 1));
-      copiedPages.forEach(p => newPdfDoc.addPage(p));
       
+      const fontCache = new Map<string, any>();
+      const getFont = async (fontId: string) => {
+          if (fontCache.has(fontId)) return fontCache.get(fontId);
+          const font = await newPdfDoc.embedFont(fontId as any);
+          fontCache.set(fontId, font);
+          return font;
+      }
+      
+      const pageIndices = this.pageOrder().map(p => p - 1);
+      const copiedPages = await newPdfDoc.copyPages(pdfLibDoc, pageIndices);
+      copiedPages.forEach(p => newPdfDoc.addPage(p));
       const pages = newPdfDoc.getPages();
       
-      // Embed fonts
-      const helveticaFont = await newPdfDoc.embedFont(StandardFonts.Helvetica);
-      
-      // Apply Page Numbers
       const settings = this.pageNumberSettings();
       if (settings.visible) {
+          const helveticaFont = await getFont(StandardFonts.Helvetica);
           const margin = { small: 18, medium: 36, large: 54 }[settings.margin], fontSize = 12;
           for (let i = 0; i < pages.length; i++) {
               const page = pages[i], { width, height } = page.getSize();
@@ -1016,44 +1340,40 @@ export class AppComponent {
           }
       }
 
-      // Apply Watermark
       const watermark = this.watermarkSettings();
       if (watermark.visible && watermark.text) {
-          const watermarkFont = await newPdfDoc.embedFont(watermark.font as any || StandardFonts.Helvetica);
+          const watermarkFont = await getFont(watermark.font as any || StandardFonts.Helvetica);
           const rgbColor = this.hexToRgb(watermark.color);
-          const angle = 45;
-
           for (const page of pages) {
               const { width, height } = page.getSize();
-              const textWidth = watermarkFont.widthOfTextAtSize(watermark.text, watermark.size);
-              const textHeight = watermarkFont.heightAtSize(watermark.size);
-              
-              const angleRad = angle * (Math.PI / 180);
-              const cosA = Math.cos(angleRad);
-              const sinA = Math.sin(angleRad);
+              const text = watermark.text;
+              const fontSize = watermark.size;
 
-              const boxCenterX = textWidth / 2;
-              const boxCenterY = textHeight / 2;
+              const textWidth = watermarkFont.widthOfTextAtSize(text, fontSize);
+              const ascent = watermarkFont.heightAtSize(fontSize);
+              const totalHeight = watermarkFont.heightAtSize(fontSize, { descender: true });
+              const descent = totalHeight - ascent;
+              const yOffset = -(ascent - descent) / 2;
 
-              const rotatedBoxCenterX = boxCenterX * cosA - boxCenterY * sinA;
-              const rotatedBoxCenterY = boxCenterX * sinA + boxCenterY * cosA;
+              page.pushOperators(
+                pushGraphicsState(),
+                translate(width / 2, height / 2),
+                rotateDegrees(45)
+              );
 
-              const x = width / 2 - rotatedBoxCenterX;
-              const y = height / 2 - rotatedBoxCenterY;
-
-              page.drawText(watermark.text, {
-                  x: x,
-                  y: y,
-                  font: watermarkFont,
-                  size: watermark.size,
-                  color: rgb(rgbColor.r, rgbColor.g, rgbColor.b),
-                  opacity: watermark.opacity,
-                  rotate: degrees(angle),
+              page.drawText(text, {
+                x: -textWidth / 2,
+                y: yOffset,
+                font: watermarkFont,
+                size: fontSize,
+                color: rgb(rgbColor.r, rgbColor.g, rgbColor.b),
+                opacity: watermark.opacity,
               });
+
+              page.pushOperators(popGraphicsState());
           }
       }
 
-      // Apply Annotations
       for (let i = 0; i < pages.length; i++) {
         const pageAnns = this.annotations()[i]; if (!pageAnns?.length) continue;
         const page = pages[i];
@@ -1063,20 +1383,12 @@ export class AppComponent {
           if (ann.type === 'image') {
             const imageBytes = ann.imageData.startsWith('data:image/png') ? 
               await newPdfDoc.embedPng(ann.imageData) : await newPdfDoc.embedJpg(ann.imageData);
-            page.drawImage(imageBytes, {
-              x: ann.x, 
-              y: pdfPageHeight - ann.y - ann.height,
-              width: ann.width, 
-              height: ann.height
-            });
+            page.drawImage(imageBytes, { x: ann.x, y: pdfPageHeight - ann.y - ann.height, width: ann.width, height: ann.height });
           } else if (ann.type === 'text') {
-             page.drawText(ann.text, { 
-               x: ann.x, 
-               y: pdfPageHeight - ann.y - ann.size, 
-               font: helveticaFont, 
-               size: ann.size, 
-               color: rgb(0, 0, 1) 
-            });
+            const fontId = ann.bold ? (ann.font.includes('Bold') ? ann.font : `${ann.font}-Bold`) : (ann.font.replace('-Bold', ''));
+            const pdfFont = await getFont(fontId as any);
+            const rgbColor = this.hexToRgb(ann.color);
+            page.drawText(ann.text, { x: ann.x, y: pdfPageHeight - ann.y - ann.size, font: pdfFont, size: ann.size, color: rgb(rgbColor.r, rgbColor.g, rgbColor.b), lineHeight: ann.size * 1.2 });
           } else if (ann.type === 'draw') {
             const svgPath = `M ${ann.path[0].x} ${pdfPageHeight - ann.path[0].y} ` + ann.path.slice(1).map(p => `L ${p.x} ${pdfPageHeight - p.y}`).join(' ');
             page.drawSvgPath(svgPath, { borderColor: rgb(1, 0, 0), borderWidth: ann.lineWidth });
@@ -1084,10 +1396,18 @@ export class AppComponent {
         }
       }
 
-      const pdfBytes = await newPdfDoc.save();
+      const saveOptions: { userPassword?: string, ownerPassword?: string } = {};
+      if (password) {
+        saveOptions.userPassword = password;
+        saveOptions.ownerPassword = password;
+      }
+      
+      const pdfBytes = await newPdfDoc.save(saveOptions);
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-      link.download = `${this.originalFileName()}(編集済み).pdf`;
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      const fileNameSuffix = password ? '(編集・保護済み)' : '(編集済み)';
+      link.download = `${this.originalFileName()}${fileNameSuffix}.pdf`;
       link.click();
       URL.revokeObjectURL(link.href);
     } catch (e) { console.error('Failed to save PDF:', e); alert('PDFの保存中にエラーが発生しました。'); } 
