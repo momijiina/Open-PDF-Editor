@@ -615,18 +615,26 @@ export class AppComponent {
     let newSelection: number = -1;
     for (let i = pageAnns.length - 1; i >= 0; i--) {
         const ann = pageAnns[i];
-        const annRect = { x: ann.x, y: ann.y, width: ann.width, height: ann.height };
-        if (ann.type === 'image') {
-            const handleSize = 10 / this.scale();
-            const handleRect = { x: ann.x + ann.width - handleSize/2, y: ann.y + ann.height - handleSize/2, width: handleSize, height: handleSize };
-            if (posUnscaled.x >= handleRect.x && posUnscaled.x <= handleRect.x + handleRect.width && posUnscaled.y >= handleRect.y && posUnscaled.y <= handleRect.y + handleRect.height) {
-                this.dragMode = 'resize'; newSelection = i; break;
+        if (ann.type === 'text' || ann.type === 'image') {
+            const annRect = { x: ann.x, y: ann.y, width: ann.width, height: ann.height };
+            
+            // Check for resize handle on images first, as it's more specific
+            if (ann.type === 'image') {
+                const handleSize = 10 / this.scale();
+                const handleRect = { x: ann.x + ann.width - handleSize/2, y: ann.y + ann.height - handleSize/2, width: handleSize, height: handleSize };
+                if (posUnscaled.x >= handleRect.x && posUnscaled.x <= handleRect.x + handleRect.width && posUnscaled.y >= handleRect.y && posUnscaled.y <= handleRect.y + handleRect.height) {
+                    this.dragMode = 'resize'; 
+                    newSelection = i; 
+                    break;
+                }
             }
-        }
-        if (posUnscaled.x >= annRect.x && posUnscaled.x <= annRect.x + annRect.width && posUnscaled.y >= annRect.y && posUnscaled.y <= annRect.y + annRect.height) {
-            this.dragMode = (ann.type === 'image' || ann.type === 'text') ? 'move' : 'none';
-            newSelection = i; 
-            break;
+
+            // Check for selection/move on the body of the annotation
+            if (posUnscaled.x >= annRect.x && posUnscaled.x <= annRect.x + annRect.width && posUnscaled.y >= annRect.y && posUnscaled.y <= annRect.y + annRect.height) {
+                this.dragMode = 'move';
+                newSelection = i; 
+                break;
+            }
         }
     }
     
