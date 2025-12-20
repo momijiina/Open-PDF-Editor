@@ -1245,9 +1245,15 @@ export class AppComponent {
     const canvas = this.signatureCanvasRef()?.nativeElement;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
+
+    // Scale the mouse coordinates from the CSS display size to the canvas's internal resolution.
+    // This corrects any discrepancies caused by borders, padding, or browser sub-pixel rendering.
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     return {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY,
     };
   }
   
