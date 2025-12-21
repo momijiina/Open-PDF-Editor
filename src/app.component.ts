@@ -71,16 +71,7 @@ type DragMode = 'move' | 'resize' | 'none';
   host: {
     '(window:keydown.Delete)': 'onDeleteKeyPressed()',
     '(window:keydown.Backspace)': 'onDeleteKeyPressed()'
-  },
-  styles: [`
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
-    }
-    .no-scrollbar {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-  `]
+  }
 })
 export class AppComponent {
   // PDF state
