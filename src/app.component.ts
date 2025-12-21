@@ -71,7 +71,16 @@ type DragMode = 'move' | 'resize' | 'none';
   host: {
     '(window:keydown.Delete)': 'onDeleteKeyPressed()',
     '(window:keydown.Backspace)': 'onDeleteKeyPressed()'
-  }
+  },
+  styles: [`
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  `]
 })
 export class AppComponent {
   // PDF state
@@ -1410,13 +1419,27 @@ export class AppComponent {
         }
       }
 
-      const saveOptions: { userPassword?: string, ownerPassword?: string } = {};
       if (password) {
-        saveOptions.userPassword = password;
-        saveOptions.ownerPassword = password;
+        if (typeof newPdfDoc.encrypt === 'function') {
+            await newPdfDoc.encrypt({
+              userPassword: password,
+              ownerPassword: password,
+              permissions: {
+                printing: 'highResolution',
+                modifying: true,
+                copying: true,
+                annotating: true,
+                fillingForms: true,
+                contentAccessibility: true,
+                documentAssembly: true,
+              }
+            });
+        } else {
+            alert('この環境では暗号化機能（パスワード保護）がサポートされていません。HTTPS環境で実行しているか確認してください。');
+        }
       }
       
-      const pdfBytes = await newPdfDoc.save(saveOptions);
+      const pdfBytes = await newPdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
