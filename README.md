@@ -2,7 +2,7 @@ AI Studioでバイブコーディングしてます。<br/>
 一部、修正できなかったエラー等はこちらで修正したり指示をだしています。<br/>
 誰かが完璧なPDF編集ソフトを作成してくれることを祈ります。
 # Open-PDF-Editor
-<img width="1481" height="841" alt="image" src="https://github.com/user-attachments/assets/420c658b-b5c4-4cd7-bd9b-fc669c175d3f" />
+<img width="1904" height="905" alt="image" src="https://github.com/user-attachments/assets/191947e7-d320-411c-a8fb-c02a816e8fd3" />
 
 [Demoサイト](https://pdf.momijiina.com/) <br/>
 
